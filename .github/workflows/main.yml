@@ -45,19 +45,23 @@ jobs:
           script: |
             adb devices
             
-            echo "🎨 Setting up headless display buffer..."
-            Xvfb :1 -screen 0 1080x1920x24 &
-            export DISPLAY=:1
+            # ⚡ FIX: Shifted from display slot :1 to :99 to prevent overlapping with the action's built-in hooks
+            echo "🎨 Setting up headless display buffer on slot :99..."
+            Xvfb :99 -screen 0 1080x1920x24 &
+            export DISPLAY=:99
             sleep 3
             
             echo "🔒 Initializing local VNC capture frame..."
             mkdir -p ~/.vnc
             echo "password" | vncpasswd -f > ~/.vnc/passwd
             chmod 600 ~/.vnc/passwd
-            tightvncserver :1 -geometry 1080x1920 -depth 24
+            
+            # ⚡ FIX: Start tightvncserver explicitly on slot :99
+            tightvncserver :99 -geometry 1080x1920 -depth 24
             
             echo "🌐 Converting VNC sockets to browser-friendly WebSockets..."
-            websockify --web=/usr/share/novnc/ 6080 localhost:5901 &
+            # ⚡ FIX: slot :99 maps to VNC port 5999 (5900 + 99)
+            websockify --web=/usr/share/novnc/ 6080 localhost:5999 &
             sleep 5
             
             echo "========================================================="
@@ -68,10 +72,10 @@ jobs:
             echo "🚀 MOUNTING LOCALTUNNEL PROXY BRIDGE..."
             npm install -g localtunnel
             
-            # ⚡ FIX: Run localtunnel in the background and dump the URL into a text file
+            # Run localtunnel in the background and dump the URL into a text file
             lt --port 6080 > lt_url.txt &
             
-            # ⚡ FIX: Wait up to 15 seconds for localtunnel to secure a public URL link
+            # Wait up to 15 seconds for localtunnel to secure a public URL link
             for i in {1..5}; do
               if [ -s lt_url.txt ]; then
                 break
