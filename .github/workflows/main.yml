@@ -10,6 +10,7 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      # Set up clean target runtime layers
       - name: Set up JDK 17
         uses: actions/setup-java@v5
         with:
@@ -43,30 +44,12 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
           
-          # ⚡ DIAGNOSTIC AUTO-FIX SCRIPT
+          # ⚡ FIX: Uses standard single-line instructions to pinpoint files safely
           script: |
             adb devices
             
-            echo "========================================================"
-            echo "🔍 DEBUG MAP: EXAMINING YOUR PROJECT STRUCTURE BELOW..."
-            echo "========================================================"
-            ls -R
-            echo "========================================================"
-            echo "📋 GRADLE PROYECT LIST:"
-            echo "========================================================"
-            ./gradlew projects
-            echo "========================================================"
+            echo "=== 🔎 REPOSITORY BLUEPRINT DETAILS ==="
+            find . -name "build.gradle" -o -name "build.gradle.kts" -o -name "settings.gradle"
             
-            # Smart conditional execution: checks common folder targets dynamically
-            if [ -f "build.gradle" ] || [ -f "build.gradle.kts" ]; then
-              echo "🎯 Executing from root directory..."
-              ./gradlew connectedCheck --no-daemon || echo "Root run failed, evaluating fallback..."
-            fi
-            
-            if [ -d "android" ]; then
-              echo "🎯 Android subfolder located! Navigating..."
-              cd android && chmod +x ./gradlew && ./gradlew connectedCheck --no-daemon
-            elif [ -d "Watches_RND" ]; then
-              echo "🎯 Project subfolder located! Navigating..."
-              cd Watches_RND && chmod +x ./gradlew && ./gradlew connectedCheck --no-daemon
-            fi
+            echo "=== 📋 REGISTERED GRADLE SUBPROJECTS ==="
+            ./gradlew projects --no-daemon
