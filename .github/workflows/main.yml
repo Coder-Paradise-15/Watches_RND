@@ -1,12 +1,12 @@
-name: Create Android 15 Emulator
+name: Android Instrumented Tests
 
 on: [push, pull_request]
 
 jobs:
-  run-emulator:
-    # Requires Linux for KVM acceleration support
+  instrumented-tests:
+    # Linux-based runner is required for hardware-accelerated nested virtualization (KVM)
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -17,28 +17,33 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      # Optimizes build speeds so the workflow doesn't time out
+      # Caches your dependencies so the workflow doesn't time out while building
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      # Crucial step: Grants execution permissions to KVM on the runner
-      - name: Enable KVM Permissions
+      # Grants execution permissions to KVM on the GitHub runner
+      - name: Enable KVM Group Permissions
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
-      # Creates, boots, and operates the Android 15 Emulator
-      - name: Run Android 15 Emulator
+      # Creates and launches the lightweight Android 15 Emulator
+      - name: Run Android Emulator and Tests
         uses: ReactiveCircus/android-emulator-runner@v2
         with:
           api-level: 35
-          target: google_apis
           arch: x86_64
-          profile: pixel_6              # Specifies a modern device dimension mapping
-          disable-animations: true     # Recommended to prevent flaky UI testing
+          # ⚡ LIGHTWEIGHT TWEAK 1: Drops heavy Google Play Services background tasks
+          target: default         
+          # ⚡ LIGHTWEIGHT TWEAK 2: Uses a much smaller resolution profile to save virtual RAM
+          profile: Nexus 4        
+          # ⚡ LIGHTWEIGHT TWEAK 3: Prevents lag and limits execution memory to 1.5GB
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -memory 1536
+          disable-animations: false
           
-          # Put the commands or scripts you want to run inside the emulator here
+          # The custom command sequence to execute inside the emulator environment
           script: |
+            chmod +x ./gradlew
             adb devices
             ./gradlew connectedCheck
