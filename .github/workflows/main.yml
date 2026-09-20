@@ -16,26 +16,22 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      # Caches your dependencies so subsequent runs build much faster
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      # ⚡ NEW STEP: Generates the missing 'gradlew' wrapper script inside the container
+      # ⚡ FIX: Added the --overwrite flag to force Gradle to generate build files safely
       - name: Bootstrap Missing Gradle Build and Wrapper
         run: |
-          # Automatically generates a template project layout with the defaults flag
-          gradle init --type basic --dsl groovy --use-defaults
+          gradle init --type basic --dsl groovy --use-defaults --overwrite
           gradle wrapper --gradle-version 8.7
           chmod +x ./gradlew
 
-      # Grants execution permissions to KVM on the GitHub runner
       - name: Enable KVM Group Permissions
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
-      # Deploys a stable, low-overhead Android 10 Environment
       - name: Run Lightweight Android 10 Emulator
         uses: ReactiveCircus/android-emulator-runner@v2
         with:
@@ -44,8 +40,6 @@ jobs:
           target: default         
           profile: Nexus 4        
           disable-animations: true
-          
-          # Forces CPU software rendering to work headlessly on the cloud backend
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
           
           script: |
