@@ -37,7 +37,7 @@ jobs:
       - name: Run Lightweight Android 10 Emulator
         uses: ReactiveCircus/android-emulator-runner@v2
         with:
-          api-level: 29
+          api-level: 35
           arch: x86_64
           target: default         
           profile: Nexus 4        
