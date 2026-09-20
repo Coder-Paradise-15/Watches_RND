@@ -43,47 +43,62 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-audio -no-snapshot -no-boot-anim
           
-          # ⚡ CRITICAL FIX: Every line ends with a semicolon and backslash (\) 
-          # This forces the action to run everything inside ONE single shell process.
+          # ⚡ FIX: We write everything to a script file and run it inside a single shell execution block
           script: |
-            echo "🔥 RUNNING PORT PURGER ENGINE..." ; \
-            sudo fuser -k 6080/tcp || true ; \
-            sudo fuser -k 5999/tcp || true ; \
-            sudo fuser -k 5554/tcp || true ; \
-            sudo fuser -k 5555/tcp || true ; \
-            sudo rm -f /tmp/.X99-lock || true ; \
-            sudo rm -f /tmp/.X11-unix/X99 || true ; \
-            tightvncserver -kill :99 || true ; \
-            adb devices ; \
-            echo "🎨 Setting up headless display buffer on slot :99..." ; \
-            Xvfb :99 -screen 0 1080x1920x24 & \
-            export DISPLAY=:99 ; \
-            sleep 3 ; \
-            echo "🔒 Initializing local VNC capture frame..." ; \
-            mkdir -p ~/.vnc ; \
-            echo "password" | vncpasswd -f > ~/.vnc/passwd ; \
-            chmod 600 ~/.vnc/passwd ; \
-            tightvncserver :99 -geometry 1080x1920 -depth 24 ; \
-            echo "🌐 Converting VNC sockets to browser-friendly WebSockets..." ; \
-            websockify --web=/usr/share/novnc/ 6080 localhost:5999 & \
-            sleep 5 ; \
-            echo "=========================================================" ; \
-            echo "🔑 YOUR ACCESS PASSWORD (RUNNER PUBLIC IP):" ; \
-            curl -s https://ifconfig.me ; \
-            echo -e "\n=========================================================" ; \
-            echo "🚀 MOUNTING LOCALTUNNEL PROXY BRIDGE..." ; \
-            npm install -g localtunnel ; \
-            lt --port 6080 > lt_url.txt & \
-            for i in {1..5}; do \
-              if [ -s lt_url.txt ]; then \
-                break ; \
-              fi ; \
-              sleep 3 ; \
-            done ; \
-            echo "=========================================================" ; \
-            echo "🎯 CLICK THE LINK BELOW TO STREAM YOUR ANDROID 15 VM:" ; \
-            echo "=========================================================" ; \
-            cat lt_url.txt ; \
-            echo "=========================================================" ; \
-            echo "⏱️ Holding VM stream active for 1 Hour. Enjoy debugging!" ; \
+            cat << 'EOF' > setup.sh
+            #!/bin/bash
+            echo "🔥 RUNNING PORT PURGER ENGINE..."
+            sudo fuser -k 6080/tcp || true
+            sudo fuser -k 5999/tcp || true
+            sudo fuser -k 5554/tcp || true
+            sudo fuser -k 5555/tcp || true
+            sudo rm -f /tmp/.X99-lock || true
+            sudo rm -f /tmp/.X11-unix/X99 || true
+            tightvncserver -kill :99 || true
+            
+            adb devices
+            
+            echo "🎨 Setting up headless display buffer on slot :99..."
+            Xvfb :99 -screen 0 1080x1920x24 &
+            export DISPLAY=:99
+            sleep 3
+            
+            echo "🔒 Initializing local VNC capture frame..."
+            mkdir -p ~/.vnc
+            echo "password" | vncpasswd -f > ~/.vnc/passwd
+            chmod 600 ~/.vnc/passwd
+            tightvncserver :99 -geometry 1080x1920 -depth 24
+            
+            echo "🌐 Converting VNC sockets to browser-friendly WebSockets..."
+            websockify --web=/usr/share/novnc/ 6080 localhost:5999 &
+            sleep 5
+            
+            echo "========================================================="
+            echo "🔑 YOUR ACCESS PASSWORD (RUNNER PUBLIC IP):"
+            curl -s https://ifconfig.me
+            echo -e "\n========================================================="
+            
+            echo "🚀 MOUNTING LOCALTUNNEL PROXY BRIDGE..."
+            npm install -g localtunnel
+            lt --port 6080 > lt_url.txt &
+            
+            for i in {1..5}; do
+              if [ -s lt_url.txt ]; then
+                break
+              fi
+              sleep 3
+            done
+            
+            echo "========================================================="
+            echo "🎯 CLICK THE LINK BELOW TO STREAM YOUR ANDROID 15 VM:"
+            echo "========================================================="
+            cat lt_url.txt
+            echo "========================================================="
+            
+            echo "⏱️ Holding VM stream active for 1 Hour. Enjoy debugging!"
             sleep 3600
+            EOF
+            
+            # Grant execution permissions and run the script in native Bash
+            chmod +x setup.sh
+            bash setup.sh
