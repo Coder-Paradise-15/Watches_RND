@@ -10,33 +10,28 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # 1. Setup proper Java runtime environments
       - name: Set up JDK 17
         uses: actions/setup-java@v5
         with:
           distribution: 'zulu'
           java-version: '17'
 
-      # 2. Setup Node environment to execute localtunnel binaries
       - name: Set up Node.js Runtime
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
-      # 3. Configure hardware nested virtualization extensions (KVM)
       - name: Configure Linux KVM Hardware Driver
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
-      # 4. Install a headless graphical buffer, VNC framework, and audio null-sinks
       - name: Install Pure Linux Desktop Rendering Utilities
         run: |
           sudo apt-get update
           sudo apt-get install -y xvfb tightvncserver websockify novnc jq curl
 
-      # 5. Launches Android 15 and hooks it straight to the web VNC encoder channels
       - name: Run Android 15 Emulator Frame
         uses: ReactiveCircus/android-emulator-runner@v2
         with:
@@ -45,8 +40,6 @@ jobs:
           target: default
           profile: pixel_6
           disable-animations: true
-          
-          # Render onto virtual screen index :1 using local software rendering pipes
           emulator-options: -no-window -gpu swiftshader_indirect -no-audio -no-snapshot -no-boot-anim
           
           script: |
@@ -58,14 +51,12 @@ jobs:
             sleep 3
             
             echo "🔒 Initializing local VNC capture frame..."
-            # Launch VNC background manager mapping display :1 onto port 5901
             mkdir -p ~/.vnc
             echo "password" | vncpasswd -f > ~/.vnc/passwd
             chmod 600 ~/.vnc/passwd
             tightvncserver :1 -geometry 1080x1920 -depth 24
             
             echo "🌐 Converting VNC sockets to browser-friendly WebSockets..."
-            # Websockify maps raw VNC stream port 5901 into noVNC web layout on port 6080
             websockify --web=/usr/share/novnc/ 6080 localhost:5901 &
             sleep 5
             
@@ -74,14 +65,25 @@ jobs:
             curl -s https://ifconfig.me
             echo -e "\n========================================================="
             
-            echo "🚀 DOWNLOADING AND MOUNTING LOCALTUNNEL PROXY BRIDGE..."
+            echo "🚀 MOUNTING LOCALTUNNEL PROXY BRIDGE..."
+            npm install -g localtunnel
+            
+            # ⚡ FIX: Run localtunnel in the background and dump the URL into a text file
+            lt --port 6080 > lt_url.txt &
+            
+            # ⚡ FIX: Wait up to 15 seconds for localtunnel to secure a public URL link
+            for i in {1..5}; do
+              if [ -s lt_url.txt ]; then
+                break
+              fi
+              sleep 3
+            done
+            
             echo "========================================================="
             echo "🎯 CLICK THE LINK BELOW TO STREAM YOUR ANDROID 15 VM:"
             echo "========================================================="
-            npm install -g localtunnel
-            
-            # Starts localtunnel listening on port 6080 and pauses the pipeline for 15 minutes
-            lt --port 6080 &
+            cat lt_url.txt
+            echo "========================================================="
             
             echo "⏱️ Holding VM stream active for 15 minutes. Use the proxy link above!"
             sleep 900
