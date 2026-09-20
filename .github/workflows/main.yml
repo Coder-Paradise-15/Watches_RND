@@ -21,8 +21,10 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       # ⚡ NEW STEP: Generates the missing 'gradlew' wrapper script inside the container
-      - name: Bootstrap Missing Gradle Wrapper
+      - name: Bootstrap Missing Gradle Build and Wrapper
         run: |
+          # Automatically generates a template project layout with the defaults flag
+          gradle init --type basic --dsl groovy --use-defaults
           gradle wrapper --gradle-version 8.7
           chmod +x ./gradlew
 
