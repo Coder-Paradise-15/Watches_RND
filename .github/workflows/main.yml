@@ -4,15 +4,15 @@ on: [push, pull_request]
 
 jobs:
   instrumented-tests:
-    # Linux-based runner is required for hardware-accelerated nested virtualization (KVM)
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      # FIX: Upgraded from v4 to v5 to resolve the GitHub Actions deprecation warning
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: 'zulu'
           java-version: '17'
@@ -34,16 +34,16 @@ jobs:
         with:
           api-level: 35
           arch: x86_64
-          # ⚡ LIGHTWEIGHT TWEAK 1: Drops heavy Google Play Services background tasks
           target: default         
-          # ⚡ LIGHTWEIGHT TWEAK 2: Uses a much smaller resolution profile to save virtual RAM
           profile: Nexus 4        
-          # ⚡ LIGHTWEIGHT TWEAK 3: Prevents lag and limits execution memory to 1.5GB
-          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -memory 1536
-          disable-animations: false
+          disable-animations: true
+          # Note: API 35 automatically raises RAM internally to 2560MB as seen in your logs.
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
           
           # The custom command sequence to execute inside the emulator environment
           script: |
             chmod +x ./gradlew
             adb devices
-            ./gradlew connectedCheck
+            
+            # ⚡ OPTIMIZATION: Limits Gradle's memory footprint so it doesn't fight the emulator for RAM
+            ./gradlew connectedCheck -Dorg.gradle.jvmargs="-Xmx2048m -XX:MaxMetaspaceSize=512m"
