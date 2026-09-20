@@ -10,25 +10,21 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # FIX: Upgraded from v4 to v5 to resolve the GitHub Actions deprecation warning
       - name: Set up JDK 17
         uses: actions/setup-java@v5
         with:
           distribution: 'zulu'
           java-version: '17'
 
-      # Caches your dependencies so the workflow doesn't time out while building
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      # Grants execution permissions to KVM on the GitHub runner
       - name: Enable KVM Group Permissions
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
-      # Creates and launches the lightweight Android 15 Emulator
       - name: Run Android Emulator and Tests
         uses: ReactiveCircus/android-emulator-runner@v2
         with:
@@ -37,13 +33,16 @@ jobs:
           target: default         
           profile: Nexus 4        
           disable-animations: true
-          # Note: API 35 automatically raises RAM internally to 2560MB as seen in your logs.
-          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
           
-          # The custom command sequence to execute inside the emulator environment
+          # ⚡ FIX: Combined flags to resolve the crash:
+          # 1. -gpu host: Leverages KVM translation directly instead of buggy swiftshader emulation layers
+          # 2. -no-metrics: Stops the blocking metrics warning message logged right before your crash
+          # 3. -memory 2048: Tells the AVD manager to strictly cap the layout footprint
+          emulator-options: -no-window -gpu host -no-snapshot -noaudio -no-boot-anim -no-metrics -memory 2048
+          
           script: |
             chmod +x ./gradlew
             adb devices
             
-            # ⚡ OPTIMIZATION: Limits Gradle's memory footprint so it doesn't fight the emulator for RAM
-            ./gradlew connectedCheck -Dorg.gradle.jvmargs="-Xmx2048m -XX:MaxMetaspaceSize=512m"
+            # ⚡ FIX: Forces the Gradle test runner to execute with minimized memory settings
+            ./gradlew connectedCheck -Dorg.gradle.jvmargs="-Xmx1536m -XX:MaxMetaspaceSize=384m" --no-daemon
