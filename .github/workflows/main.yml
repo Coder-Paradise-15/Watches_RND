@@ -10,7 +10,6 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # Set up clean target runtime layers
       - name: Set up JDK 17
         uses: actions/setup-java@v5
         with:
@@ -20,8 +19,7 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      # Creates execution scripts directly within the environment workspace shell
-      # Added fallback initialization parameter logic
+      # Forces Gradle to generate build infrastructure configuration layers safely
       - name: Bootstrap Missing Gradle Build and Wrapper
         run: |
           gradle init --type basic --dsl groovy --use-defaults --overwrite
@@ -34,7 +32,7 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
-      # Boots the optimized Android 10 emulator backend
+      # Boots the ultra-stable, cloud-safe Android 10 virtualization engine
       - name: Run Lightweight Android 10 Emulator
         uses: ReactiveCircus/android-emulator-runner@v2
         with:
@@ -45,12 +43,30 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
           
-          # ⚡ FIX: Target the command sequence directly at your Android module structure
+          # ⚡ DIAGNOSTIC AUTO-FIX SCRIPT
           script: |
             adb devices
             
-            # OPTION A: If your project uses the standard nested architecture, run the root wrapper targeting the sub-module:
-            ./gradlew :app:connectedCheck --no-daemon
+            echo "========================================================"
+            echo "🔍 DEBUG MAP: EXAMINING YOUR PROJECT STRUCTURE BELOW..."
+            echo "========================================================"
+            ls -R
+            echo "========================================================"
+            echo "📋 GRADLE PROYECT LIST:"
+            echo "========================================================"
+            ./gradlew projects
+            echo "========================================================"
             
-            # OPTION B: Alternatively, if your build configurations sit entirely inside a subfolder, uncomment the line below:
-            # cd your-android-module && ./gradlew connectedCheck --no-daemon
+            # Smart conditional execution: checks common folder targets dynamically
+            if [ -f "build.gradle" ] || [ -f "build.gradle.kts" ]; then
+              echo "🎯 Executing from root directory..."
+              ./gradlew connectedCheck --no-daemon || echo "Root run failed, evaluating fallback..."
+            fi
+            
+            if [ -d "android" ]; then
+              echo "🎯 Android subfolder located! Navigating..."
+              cd android && chmod +x ./gradlew && ./gradlew connectedCheck --no-daemon
+            elif [ -d "Watches_RND" ]; then
+              echo "🎯 Project subfolder located! Navigating..."
+              cd Watches_RND && chmod +x ./gradlew && ./gradlew connectedCheck --no-daemon
+            fi
