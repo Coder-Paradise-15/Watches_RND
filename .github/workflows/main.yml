@@ -1,55 +1,61 @@
-name: Android Instrumented Tests
+name: Live Stream Android VM (No Ngrok)
 
 on: [push, pull_request]
 
 jobs:
-  instrumented-tests:
+  launch-android-vm:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # Set up clean target runtime layers
-      - name: Set up JDK 17
-        uses: actions/setup-java@v5
-        with:
-          distribution: 'zulu'
-          java-version: '17'
-
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
-
-      # Forces Gradle to generate build infrastructure configuration layers safely
-      - name: Bootstrap Missing Gradle Build and Wrapper
-        run: |
-          gradle init --type basic --dsl groovy --use-defaults --overwrite
-          gradle wrapper --gradle-version 8.7
-          chmod +x ./gradlew
-
-      - name: Enable KVM Group Permissions
+      # 1. Activates hardware virtualization pathways directly inside the host kernel
+      - name: Configure Linux KVM Virtual Machine Driver
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
-      # Boots the ultra-stable, cloud-safe Android 10 virtualization engine
-      - name: Run Lightweight Android 15 Emulator
-        uses: ReactiveCircus/android-emulator-runner@v2
+      # 2. Provisions Node.js to access the open-source tunnel engine
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
-          api-level: 35
-          arch: x86_64
-          target: default         
-          profile: Nexus 4        
-          disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          node-version: '20'
+
+      # 3. Boots up the hardware-accelerated Android QEMU/KVM virtual machine
+      - name: Deploy Android Virtual Machine Container
+        run: |
+          docker run -d \
+            --privileged \
+            --device /dev/kvm \
+            -p 6080:6080 \
+            -p 5554:5554 \
+            -p 5555:5555 \
+            -e EMULATOR_DEVICE="Pixel 4" \
+            -e WEB_VNC=true \
+            -e VM_ACCEL=true \
+            --name native-android-vm \
+            budtmo/docker-android:emulator_11.0
+
+      # 4. Installs localtunnel and outputs the secure web endpoint to your build console
+      - name: Start Live Link Stream Engine
+        run: |
+          # Install localtunnel globally via npm
+          npm install -g localtunnel
           
-          # ⚡ FIX: Uses standard single-line instructions to pinpoint files safely
-          script: |
-            adb devices
-            
-            echo "=== 🔎 REPOSITORY BLUEPRINT DETAILS ==="
-            find . -name "build.gradle" -o -name "build.gradle.kts" -o -name "settings.gradle"
-            
-            echo "=== 📋 REGISTERED GRADLE SUBPROJECTS ==="
-            ./gradlew projects --no-daemon
+          echo "⏳ Waiting for Android VM initialization..."
+          sleep 10
+          
+          # Print the public IP of the runner (Localtunnel requires this as a password on first click)
+          echo "========================================================="
+          echo "🔑 YOUR ACCESS PASSWORD (RUNNER PUBLIC IP):"
+          curl -s https://ifconfig.me
+          echo -e "\n========================================================="
+          
+          echo "🌐 OPENING LOCALTUNNEL BRIDGE..."
+          echo "========================================================="
+          echo "🎯 CLICK THE LINK BELOW TO ACCESS YOUR ANDROID VM LIVE:"
+          echo "========================================================="
+          # Starts the background proxy link pointing to your exposed noVNC web server
+          lt --port 6080
