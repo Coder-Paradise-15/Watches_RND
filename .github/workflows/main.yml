@@ -34,7 +34,7 @@ jobs:
           sudo udevadm trigger --name-match=kvm
 
       # Boots the ultra-stable, cloud-safe Android 10 virtualization engine
-      - name: Run Lightweight Android 10 Emulator
+      - name: Run Lightweight Android 15 Emulator
         uses: ReactiveCircus/android-emulator-runner@v2
         with:
           api-level: 35
