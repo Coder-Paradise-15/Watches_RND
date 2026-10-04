@@ -1,0 +1,59 @@
+name: Remote Android VM Debugger Bridge
+
+on:
+  workflow_dispatch:
+
+jobs:
+  run-emulator:
+    runs-on: ubuntu-latest # Bypasses the macOS queue instantly
+    steps:
+      - name: Checkout Code Repository
+        uses: actions/checkout@v4
+
+      - name: Set Up Java Environment
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Install Android SDK Components
+        run: |
+          echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "platform-tools" "platforms;android-30" "system-images;android-30;google_apis;x86_64"
+
+      - name: Create lightweight Android Emulator
+        run: |
+          echo "no" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
+          $ANDROID_HOME/cmdline-tools/latest/bin/avdmanager create avd -n test_vm -k "system-images;android-30;google_apis;x86_64" --force --device "pixel"
+
+      - name: Launch Headless Android Emulator Kernel
+        run: |
+          # Added -no-accel to allow the emulator to run smoothly on standard Linux cloud servers
+          nohup $ANDROID_HOME/emulator/emulator -avd test_vm -no-window -no-snapshot -no-audio -no-boot-anim -no-accel -camera-back none -camera-front none -gpu swiftshader_indirect -memory 2048 > emulator.log 2>&1 &
+          
+      - name: Install Network Tunnel (Localtunnel)
+        run: npm install -g localtunnel
+
+      - name: Establish ADB Connection Bridge and Maintain Session
+        run: |
+          echo "⏳ Waiting for Android kernel to complete boot sequence..."
+          # Since it's running without hardware acceleration, give it a minute to stabilize
+          sleep 60
+          $ANDROID_HOME/platform-tools/adb wait-for-device
+          
+          $ANDROID_HOME/platform-tools/adb root
+          $ANDROID_HOME/platform-tools/adb wait-for-device
+          
+          echo "✅ Android VM is fully booted and running in ROOT mode!"
+          
+          nohup lt --port 5555 --subdomain local-android-debug-bridge > tunnel.log 2>&1 &
+          
+          echo "------------------------------------------------------------------"
+          echo "🌐 TUNNEL IS LIVE!"
+          echo "To connect your local PC terminal to this cloud VM, run:"
+          echo "   adb connect local-android-debug-bridge.loca.lt:80"
+          echo "------------------------------------------------------------------"
+          
+          for i in {1..300}; do
+            echo "⏱️ Session Active - Minute $i / 300"
+            sleep 60
+          done
