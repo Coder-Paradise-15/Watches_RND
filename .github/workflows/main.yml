@@ -1,96 +1,62 @@
-name: Live Stream Android 15 VM (Solid Core Pipeline)
+name: Remote Android VM Debugger Bridge
 
-on: [push, pull_request]
+on:
+  workflow_dispatch: # Allows you to start the VM manually with a single click
 
 jobs:
-  launch-pure-android-vm:
-    runs-on: ubuntu-latest
-
+  run-emulator:
+    runs-on: macos-13 # macOS runners support nested hardware acceleration for Android Emulators
     steps:
-      - name: Checkout Code
+      - name: Checkout Code Repository
         uses: actions/checkout@v4
 
-      # Set up clean target runtime layers
-      - name: Set up JDK 17
-        uses: actions/setup-java@v5
+      - name: Set Up Java Environment
+        uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: Set up Node.js Runtime
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      # 1. Configures structural hardware acceleration permissions on bare-metal host kernel
-      - name: Configure Linux KVM Hardware Driver
+      - name: Install Android SDK Components
         run: |
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
+          echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "platform-tools" "platforms;android-30" "system-images;android-30;google_apis;x86_64"
 
-      # 2. Installs core streaming components and port managers
-      - name: Install Pure Linux Desktop Rendering & Management Utilities
+      - name: Create lightweight Android Emulator
         run: |
-          sudo apt-get update
-          sudo apt-get install -y tightvncserver websockify novnc jq curl psmisc
-          sudo npm install -g localtunnel
+          echo "no" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
+          $ANDROID_HOME/cmdline-tools/latest/bin/avdmanager create avd -n test_vm -k "system-images;android-30;google_apis;x86_64" --force --device "pixel"
 
-      # 3. Mounts the network proxy layer in the host backdrop BEFORE firing the emulator
-      # This guarantees that localtunnel grabs the socket cleanly without timing out
-      - name: Pre-Launch Proxy Bridge (localtunnel)
+      - name: Launch Headless Android Emulator Kernel
         run: |
-          echo "========================================================="
-          echo "🔑 YOUR ACCESS PASSWORD (RUNNER PUBLIC IP):"
-          curl -s https://ifconfig.me
-          echo -e "\n========================================================="
+          # Booting with minimal arguments to keep it extremely stable and lightweight
+          nohup $ANDROID_HOME/emulator/emulator -avd test_vm -no-window -no-snapshot -no-audio -no-boot-anim -camera-back none -camera-front none -gpu swiftshader_indirect -memory 2048 > emulator.log 2>&1 &
           
-          # Initialize the proxy link mapping port 6080 into a local log file
-          lt --port 6080 > host_lt_url.txt &
-          
-          # Let the network capture the routing tables
-          sleep 5
-          echo "========================================================="
-          echo "🎯 CLICK THE LINK BELOW TO ACCESS YOUR ANDROID 15 VM:"
-          echo "========================================================="
-          cat host_lt_url.txt
-          echo "========================================================="
+      - name: Install Network Tunnel (Localtunnel)
+        run: npm install -g localtunnel
 
-      # 4. Boots the Android 15 VM directly inside the action's standard window mapping
-      - name: Attach Streaming Server to Android 15 Frame
-        uses: ReactiveCircus/android-emulator-runner@v2
-        with:
-          api-level: 35
-          arch: x86_64
-          target: default
-          profile: pixel_6
-          disable-animations: true
-          # ⚡ SOLID CONFIG 1: Drop "-no-window" so the action provisions the graphics layer (:1) natively
-          emulator-options: -gpu swiftshader_indirect -no-audio -no-snapshot -no-boot-anim
+      - name: Establish ADB Connection Bridge and Maintain Session
+        run: |
+          echo "⏳ Waiting for Android kernel to complete boot sequence..."
+          $ANDROID_HOME/platform-tools/adb wait-for-device
           
-          # ⚡ SOLID CONFIG 2: Inject VNC and WebSockets right into the action's active display layer
-          script: |
-            echo "⚡ Interfacing with active display: $DISPLAY"
-            adb devices
-            
-            echo "🔒 Generating local VNC authentication records..."
-            mkdir -p ~/.vnc
-            echo "password" | vncpasswd -f > ~/.vnc/passwd
-            chmod 600 ~/.vnc/passwd
-            
-            echo "🔥 Cleaning up any conflicting background locks..."
-            tightvncserver -kill :1 || true
-            sudo fuser -k 6080/tcp || true
-            sudo fuser -k 5901/tcp || tcp
-            
-            echo "🔒 Launching interactive server on primary display channel..."
-            # Hooks VNC directly to display slot :1 (which maps to VNC port 5901)
-            tightvncserver :1 -geometry 1080x1920 -depth 24
-            
-            echo "🌐 Converting visual outputs to browser-compliant format..."
-            # Transmutes VNC port 5901 to the HTML rendering slot on port 6080
-            websockify --web=/usr/share/novnc/ 6080 localhost:5901 &
-            sleep 5
-            
-            echo "⏱️ Android 15 Virtual Machine is fully live. Enjoy your session!"
-            sleep 3600
+          # Force root access to allow direct database inspection
+          $ANDROID_HOME/platform-tools/adb root
+          $ANDROID_HOME/platform-tools/adb wait-for-device
+          
+          echo "✅ Android VM is fully booted and running in ROOT mode!"
+          
+          # Open the Localtunnel bridge pointing to the default local ADB server port (5555)
+          # We forward the cloud VM's internal server port so your local PC can hook in
+          nohup lt --port 5555 --subdomain local-android-debug-bridge > tunnel.log 2>&1 &
+          
+          echo "------------------------------------------------------------------"
+          echo "🌐 TUNNEL IS LIVE!"
+          echo "To connect your local PC terminal to this cloud VM, run:"
+          echo "   adb connect local-android-debug-bridge.loca.lt:80"
+          echo "------------------------------------------------------------------"
+          
+          # Keeps the workflow alive for up to 5 hours so you have plenty of time to inspect
+          echo "Looping connection link nodes. Session timeout set to 5 hours..."
+          for i in {1..300}; do
+            echo "⏱️ Session Active - Minute $i / 300"
+            sleep 60
+          done
